@@ -395,8 +395,7 @@ INDEX_HTML = """<!doctype html>
 <div class="wrap">
   <header>
     <h1>&#128208; PDF Resizer &amp; Label Fitter</h1>
-    <p>Ubah ukuran halaman PDF (mis. label pengiriman) ke 100&times;100&nbsp;mm. Mode default: konten <strong>penuh kiri-kanan</strong>, <strong>rata tengah atas-bawah</strong>, rasio tetap terjaga (tidak gepeng).</p>
-  </header>
+    </header>
 
   <form id="form" class="card">
     <div class="dropzone" id="dropzone">
@@ -466,7 +465,7 @@ INDEX_HTML = """<!doctype html>
   </form>
 
   <footer>
-    Diproses di server (Python + pypdf + pdfplumber) &middot; File tidak disimpan permanen.
+    @ Yudha Pradipta
   </footer>
 </div>
 
@@ -592,7 +591,7 @@ form.addEventListener('submit', async (e) => {
     a.remove();
     URL.revokeObjectURL(url);
     statusEl.className = 'ok';
-    statusEl.textContent = '\\u2713 Selesai! PDF hasil sudah terunduh.';
+    statusEl.textContent = '\\u2713 Selesai! PDF hasil sudah terconvert.';
   } catch (err) {
     statusEl.className = 'err';
     statusEl.textContent = err.message;
