@@ -1,45 +1,56 @@
-# PDF Resizer & Stretch (100x100 Label Converter)
+# PDF Resizer & Label Fitter (100×100 mm)
 
-Web app Python (Flask) untuk mengubah ukuran halaman PDF apa pun (misalnya
-label pengiriman dengan ukuran custom / A6) menjadi ukuran target tertentu
-seperti **100 x 100 mm**, dengan:
+Web app Python (Flask) untuk mengubah ukuran halaman PDF apa pun (mis. label
+pengiriman Shopee ukuran ~105×148 mm dengan banyak ruang kosong) menjadi
+ukuran target seperti **100 × 100 mm**.
 
-- **Stretch** — konten di-*stretch* (non-uniform scale) supaya mengisi penuh
-  kanvas target persis, tanpa sisa area kosong.
-- **Fit** — rasio aspek konten dipertahankan, dipusatkan, dan sisa ruang jadi
-  margin otomatis.
-- **Auto-crop** — mendeteksi bounding box konten asli (teks, gambar/barcode,
-  garis kotak) sehingga area kosong pada PDF asli dibuang dulu sebelum
-  di-resize — inilah yang membuat hasil "penuh" seperti contoh 100x100 Anda,
-  bukan sekadar PDF yang diperkecil dengan banyak ruang kosong.
-- **Margin manual** — tambahkan margin (mm) di semua sisi jika diperlukan.
-- Preset ukuran cepat (100x100mm, 100x150mm, 10x10cm, 4x6in, A4) dan input
-  ukuran custom.
+Mode default sekarang **Fit Lebar**: konten diperbesar sampai **penuh
+kiri–kanan**, rasio aspek tetap dijaga (tidak gepeng), dan sisa ruang di atas
+dan bawah dibagi rata sehingga label **rata tengah secara vertikal**.
 
-Contoh kasus nyata yang jadi acuan: PDF label Shopee ukuran ~105x148mm
-(banyak ruang kosong di bawah) → dikonversi jadi PDF label rapi 100x100mm
-persis seperti template kurir JTR.
+## Yang diperbaiki dari versi sebelumnya
+
+1. **Auto-crop sekarang benar-benar bekerja.**
+   Label Shopee punya satu **kotak putih sebesar satu halaman penuh** di
+   lapisan paling bawah. Versi lama ikut menghitung kotak itu sebagai
+   "konten", sehingga bounding box = seluruh halaman dan auto-crop tidak
+   membuang apa-apa. Akibatnya konten harus di-*stretch* habis-habisan dan
+   hasilnya gepeng / tidak pas.
+   Sekarang deteksi konten mengabaikan:
+   - karakter spasi / glyph kosong,
+   - shape yang tidak di-*fill* maupun di-*stroke* (tidak terlihat),
+   - shape ber-*fill* putih tanpa garis,
+   - shape yang menutupi ≥ 92% luas halaman (background halaman).
+
+2. **Mode baru `fit_width`** (default) — skala seragam agar konten pas penuh
+   selebar kanvas, lalu dipusatkan vertikal. Ini yang Anda minta.
+   Ditambah `fit_height` (penuh atas–bawah, tengah horizontal).
+
+3. **Selalu rata tengah** pada sumbu yang tersisa, untuk semua mode.
+
+4. **Anti-terpotong** (`no_overflow`, default aktif): kalau hasil fit-lebar
+   ternyata lebih tinggi dari kanvas, skala otomatis diturunkan agar tidak ada
+   bagian label yang terpotong.
+
+5. Menghormati `/Rotate` halaman, mediabox yang origin-nya bukan (0,0), dan
+   menyetel `cropbox` hasil = ukuran target.
 
 ## Struktur Proyek
 
 ```
 pdf-resizer/
 ├── api/
-│   └── index.py         # Flask app + logika resize/stretch/fit/margin (SATU FILE)
+│   └── index.py         # Flask app + seluruh logika resize (SATU FILE)
 ├── requirements.txt
 ├── vercel.json          # Konfigurasi deploy Vercel (Python serverless)
 ├── .gitignore
 └── README.md
 ```
 
-> **Kenapa satu file saja?** Awalnya logika resize dipisah ke
-> `api/pdf_resizer.py` lalu di-`import` oleh `api/index.py`. Di beberapa
-> setup Vercel, file kedua ini tidak ikut ter-bundle oleh builder
-> `@vercel/python`, sehingga `import pdf_resizer` gagal dan **semua**
-> request (termasuk halaman utama) berakhir `500
-> FUNCTION_INVOCATION_FAILED`. Semua logika sekarang digabung ke satu file
-> `api/index.py` supaya tidak ada risiko impor antar-file yang gagal
-> ter-bundle.
+> **Kenapa satu file saja?** Di beberapa setup Vercel, file `.py` kedua di
+> dalam `api/` tidak ikut ter-bundle oleh `@vercel/python`, sehingga
+> `import` gagal dan semua request berakhir `500
+> FUNCTION_INVOCATION_FAILED`. Semua logika digabung di `api/index.py`.
 
 ## Menjalankan Secara Lokal
 
@@ -53,32 +64,27 @@ pip install -r requirements.txt
 python3 api/index.py
 ```
 
-Buka http://127.0.0.1:5000 di browser, upload PDF, atur ukuran target /
-margin / mode, lalu klik **Convert & Download PDF**.
+Buka http://127.0.0.1:5000, upload PDF, pilih mode, lalu **Convert & Download PDF**.
 
 ## Deploy ke Vercel
 
 ### Opsi A — via GitHub (disarankan)
 
-1. Buat repo baru di GitHub, lalu push isi folder ini:
-   ```bash
-   cd pdf-resizer
-   git init
-   git add .
-   git commit -m "Initial commit: PDF resizer app"
-   git branch -M main
-   git remote add origin https://github.com/USERNAME/NAMA-REPO.git
-   git push -u origin main
-   ```
-2. Buka https://vercel.com/new, pilih **Import Git Repository**, pilih repo
-   tadi.
-3. Vercel akan otomatis mendeteksi `vercel.json` dan menjalankan
-   `@vercel/python`. Tidak perlu mengubah Build Command / Output Directory —
-   biarkan default.
-4. Klik **Deploy**. Setelah selesai, app bisa diakses di URL `*.vercel.app`
-   yang diberikan.
+```bash
+cd pdf-resizer
+git init
+git add .
+git commit -m "PDF resizer: fit-width + vertical center"
+git branch -M main
+git remote add origin https://github.com/USERNAME/NAMA-REPO.git
+git push -u origin main
+```
 
-### Opsi B — via Vercel CLI (tanpa GitHub)
+Lalu buka https://vercel.com/new → **Import Git Repository** → pilih repo →
+**Deploy**. Vercel otomatis membaca `vercel.json`; Build Command / Output
+Directory biarkan default.
+
+### Opsi B — via Vercel CLI
 
 ```bash
 npm install -g vercel
@@ -87,55 +93,60 @@ vercel login
 vercel --prod
 ```
 
-## Cara Kerja Endpoint
+## Endpoint
 
 - `GET /` — Halaman UI upload.
-- `POST /api/convert` — Terima `multipart/form-data`:
-  - `file`: file PDF
-  - `width_mm`, `height_mm`: ukuran target (mm)
-  - `margin_mm`: margin (mm), default 0
-  - `mode`: `stretch` atau `fit`
-  - `auto_crop`: `1` atau `0`
-  - Response: file PDF hasil (`application/pdf`) siap diunduh.
-- `GET /api/health` — Health check sederhana (`{"status": "ok"}`).
+- `POST /api/convert` — `multipart/form-data`:
+  | field | isi | default |
+  |---|---|---|
+  | `file` | file PDF | wajib |
+  | `width_mm`, `height_mm` | ukuran target (mm) | 100, 100 |
+  | `margin_mm` | margin semua sisi (mm) | 0 |
+  | `mode` | `fit_width` \| `fit_height` \| `fit` \| `stretch` | `fit_width` |
+  | `auto_crop` | `1` / `0` | `1` |
+  | `no_overflow` | `1` / `0` | `1` |
+
+  Response: file PDF hasil (`application/pdf`).
+- `GET /api/health` — `{"status": "ok"}`.
+
+Contoh cURL:
+
+```bash
+curl -X POST https://NAMA-APP.vercel.app/api/convert \
+  -F "file=@label.pdf" \
+  -F "width_mm=100" -F "height_mm=100" \
+  -F "mode=fit_width" -F "auto_crop=1" \
+  -o label_100x100.pdf
+```
 
 ## Catatan Teknis
 
-- Deteksi area konten (untuk auto-crop) memakai **pdfplumber** (pure
-  Python, membaca posisi teks/garis/gambar) — bukan PyMuPDF — supaya
-  package yang di-deploy ke Vercel jauh lebih kecil (~25 MB total vs ~60+ MB
-  jika pakai PyMuPDF) dan tidak bergantung pada binary native yang kadang
-  bermasalah di lingkungan serverless.
-- Transformasi ukuran (scale + translate) dilakukan dengan **pypdf**
-  (`Transformation().scale(...).translate(...)`), lalu hasilnya digabung
-  (`merge_page`) ke halaman baru berukuran target.
-- Mode *stretch* menskalakan sumbu X dan Y secara independen agar pas persis
-  dengan area target (dikurangi margin).
-- Mode *fit* menskalakan secara seragam (aspect ratio terjaga) dan
-  memusatkan hasil di tengah area target.
-- Ukuran file dibatasi 15 MB per upload (bisa diubah di `MAX_CONTENT_LENGTH`
-  pada `api/index.py`) — sesuaikan dengan limit body Vercel (default fungsi
-  serverless Vercel ± 4.5 MB untuk request body pada paket gratis; naikkan
-  paket atau gunakan file lebih kecil bila perlu).
+- Deteksi area konten memakai **pdfplumber** (pure Python) — bukan PyMuPDF —
+  supaya bundle Vercel jauh lebih kecil dan tidak bergantung binary native.
+- Transformasi ukuran memakai **pypdf**
+  (`Transformation().scale(...).translate(...)`), hasilnya di-`merge_page` ke
+  halaman baru berukuran target.
+- Batas upload 15 MB (`MAX_CONTENT_LENGTH` di `api/index.py`). Body request
+  fungsi serverless Vercel paket gratis ± 4.5 MB — gunakan file lebih kecil
+  bila perlu.
 
 ## Troubleshooting
 
-**Muncul "500 FUNCTION_INVOCATION_FAILED" setelah deploy:**
-1. Buka **Vercel Dashboard → nama project → tab "Logs"** (atau "Functions"),
-   lalu ulangi request yang gagal — pesan error Python yang sebenarnya akan
-   muncul di sana (mis. `ModuleNotFoundError`, dsb). Ini paling cepat untuk
-   tahu akar masalahnya.
-2. Pastikan struktur project **persis** seperti di atas — jangan menambah
-   file `.py` lain di dalam folder `api/` kecuali Anda juga mengatur
-   `vercel.json` (`config.includeFiles`) untuk membundelnya.
-3. Pastikan `requirements.txt` ikut ter-commit ke Git dan berada di **root**
-   folder project (sejajar dengan `vercel.json`), bukan di dalam `api/`.
-4. Coba redeploy dari awal: hapus project di Vercel, lalu import ulang repo
-   GitHub-nya (kadang cache build lama menyebabkan masalah).
-5. Jika masih gagal, jalankan dulu secara lokal (`python3 api/index.py`) —
-   jika lokal berjalan normal tapi Vercel tetap 500, hampir pasti
-   penyebabnya ada di log function Vercel (langkah 1), bukan di kode.
+**500 FUNCTION_INVOCATION_FAILED setelah deploy:**
+1. Vercel Dashboard → project → **Logs** / **Functions**, ulangi request yang
+   gagal; error Python asli muncul di sana.
+2. Jangan menambah file `.py` lain di dalam `api/` tanpa mengatur
+   `config.includeFiles` di `vercel.json`.
+3. Pastikan `requirements.txt` ter-commit dan berada di **root** project
+   (sejajar `vercel.json`).
+4. Coba redeploy bersih (hapus project di Vercel, import ulang repo).
+
+**Hasil masih ada ruang kosong di kiri/kanan:** artinya konten PDF asli memang
+lebih tinggi daripada lebar setelah di-crop, dan opsi "jangan potong" menahan
+skala agar tidak terpotong. Matikan centang *"Jangan potong konten bila
+melebihi kanvas"* jika Anda memang ingin penuh selebar kanvas walau bagian
+atas/bawah terpotong.
 
 ## Lisensi
 
-Bebas digunakan dan dimodifikasi sesuai kebutuhan Anda.
+Bebas digunakan dan dimodifikasi.
