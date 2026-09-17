@@ -352,6 +352,63 @@ INDEX_HTML = """<!doctype html>
   }
   .presets button:hover { border-color: var(--accent); color: var(--text); }
 
+  .tpl-box {
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: rgba(255,255,255,0.02);
+  }
+  .tpl-box > label { margin-bottom: 10px; }
+  .tpl-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .tpl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #0f1329;
+    color: var(--muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .tpl-chip:hover { border-color: var(--accent); color: var(--text); }
+  .tpl-chip.active { border-color: var(--accent); background: rgba(255,106,61,0.12); color: var(--text); }
+  .tpl-chip .star { color: var(--accent); font-size: 0.72rem; }
+  .tpl-chip .del {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0 0 0 2px;
+  }
+  .tpl-chip .del:hover { color: var(--err); }
+  .tpl-empty { font-size: 0.8rem; color: var(--muted); opacity: .7; }
+  .tpl-save { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tpl-save input[type=text] {
+    flex: 1 1 200px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background-color: #0f1329;
+    color: var(--text);
+    font-size: 0.88rem;
+  }
+  .tpl-save input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .tpl-save button {
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: rgba(255,106,61,0.12);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .tpl-save button:hover { background: var(--accent); }
+  .tpl-hint { font-size: 0.75rem; color: var(--muted); opacity: .75; margin-top: 9px; }
+
   .checkbox-row { display: flex; align-items: center; gap: 9px; font-size: 0.86rem; color: var(--muted); }
   .checkbox-row input { width: 16px; height: 16px; accent-color: var(--accent); }
 
@@ -437,6 +494,22 @@ INDEX_HTML = """<!doctype html>
           <span>Jangan potong konten bila melebihi kanvas</span>
         </div>
       </div>
+
+      <div class="full">
+        <div class="tpl-box">
+          <label>&#128190; Template pengaturan</label>
+          <div class="tpl-list" id="tplList"></div>
+          <div class="tpl-save">
+            <input type="text" id="tplName" placeholder="Nama template, mis. JTR 100x100" maxlength="40" />
+            <button type="button" id="tplSave">Simpan pengaturan sekarang</button>
+          </div>
+          <div class="checkbox-row" style="margin-top:10px;">
+            <input type="checkbox" id="tplDefault" />
+            <span>Jadikan template aktif sebagai default (otomatis dipakai saat halaman dibuka)</span>
+          </div>
+          <div class="tpl-hint">Template menyimpan ukuran, mode, margin, dan opsi &mdash; tersimpan di browser ini saja. Klik template untuk memakainya, klik &times; untuk menghapus.</div>
+        </div>
+      </div>
     </div>
 
     <button type="submit" class="submit-btn" id="submitBtn">Convert &amp; Download PDF</button>
@@ -491,11 +564,186 @@ document.querySelectorAll('.presets button').forEach(btn => {
 
 document.querySelectorAll('.mode-toggle button').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.mode-toggle button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    mode = btn.dataset.mode;
+    setMode(btn.dataset.mode);
+    clearActiveTpl();
   });
 });
+
+/* ---------------- Template pengaturan (disimpan di localStorage) --------- */
+
+const TPL_KEY = 'pdfresizer_templates_v1';
+const TPL_DEFAULT_KEY = 'pdfresizer_default_tpl_v1';
+
+const BUILTIN_TPL = [
+  { id: 'b_jtr', name: 'JTR 100x100 (Fit Lebar)', builtin: true,
+    s: { w: 100, h: 100, margin: 0, mode: 'fit_width', autocrop: true, nooverflow: true } },
+  { id: 'b_fit2', name: 'Fit + margin 2 mm', builtin: true,
+    s: { w: 100, h: 100, margin: 2, mode: 'fit', autocrop: true, nooverflow: true } },
+  { id: 'b_100x150', name: 'Thermal 100x150', builtin: true,
+    s: { w: 100, h: 150, margin: 0, mode: 'fit_width', autocrop: true, nooverflow: true } },
+  { id: 'b_stretch', name: 'Stretch penuh 100x100', builtin: true,
+    s: { w: 100, h: 100, margin: 0, mode: 'stretch', autocrop: true, nooverflow: true } }
+];
+
+const tplList = document.getElementById('tplList');
+const tplName = document.getElementById('tplName');
+const tplSaveBtn = document.getElementById('tplSave');
+const tplDefaultBox = document.getElementById('tplDefault');
+let activeTplId = null;
+
+function loadUserTpl() {
+  try { return JSON.parse(localStorage.getItem(TPL_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+function storeUserTpl(list) {
+  try { localStorage.setItem(TPL_KEY, JSON.stringify(list)); } catch (e) {}
+}
+function allTpl() { return BUILTIN_TPL.concat(loadUserTpl()); }
+function defaultTplId() {
+  try { return localStorage.getItem(TPL_DEFAULT_KEY); } catch (e) { return null; }
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === m);
+  });
+}
+
+function currentSettings() {
+  return {
+    w: parseFloat(document.getElementById('width').value) || 100,
+    h: parseFloat(document.getElementById('height').value) || 100,
+    margin: parseFloat(document.getElementById('margin').value) || 0,
+    mode: mode,
+    autocrop: document.getElementById('autocrop').checked,
+    nooverflow: document.getElementById('nooverflow').checked
+  };
+}
+
+function applySettings(s) {
+  document.getElementById('width').value = s.w;
+  document.getElementById('height').value = s.h;
+  document.getElementById('margin').value = s.margin;
+  document.getElementById('autocrop').checked = !!s.autocrop;
+  document.getElementById('nooverflow').checked = s.nooverflow !== false;
+  setMode(s.mode || 'fit_width');
+}
+
+function clearActiveTpl() {
+  activeTplId = null;
+  tplDefaultBox.checked = false;
+  document.querySelectorAll('.tpl-chip').forEach(c => c.classList.remove('active'));
+}
+
+function useTpl(t) {
+  applySettings(t.s);
+  activeTplId = t.id;
+  tplDefaultBox.checked = defaultTplId() === t.id;
+  renderTpl();
+}
+
+function renderTpl() {
+  const list = allTpl();
+  const def = defaultTplId();
+  tplList.innerHTML = '';
+  if (!list.length) {
+    const p = document.createElement('span');
+    p.className = 'tpl-empty';
+    p.textContent = 'Belum ada template.';
+    tplList.appendChild(p);
+    return;
+  }
+  list.forEach(t => {
+    const chip = document.createElement('span');
+    chip.className = 'tpl-chip' + (t.id === activeTplId ? ' active' : '');
+    chip.title = t.s.w + 'x' + t.s.h + ' mm, mode ' + t.s.mode + ', margin ' + t.s.margin + ' mm';
+
+    const label = document.createElement('span');
+    label.textContent = t.name;
+    label.addEventListener('click', () => useTpl(t));
+    chip.appendChild(label);
+
+    if (t.id === def) {
+      const star = document.createElement('span');
+      star.className = 'star';
+      star.textContent = '\\u2605';
+      star.title = 'Template default';
+      chip.appendChild(star);
+    }
+
+    if (!t.builtin) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'del';
+      del.textContent = '\\u00d7';
+      del.title = 'Hapus template';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('Hapus template "' + t.name + '"?')) return;
+        storeUserTpl(loadUserTpl().filter(x => x.id !== t.id));
+        if (defaultTplId() === t.id) { try { localStorage.removeItem(TPL_DEFAULT_KEY); } catch (err) {} }
+        if (activeTplId === t.id) activeTplId = null;
+        renderTpl();
+      });
+      chip.appendChild(del);
+    }
+
+    tplList.appendChild(chip);
+  });
+}
+
+tplSaveBtn.addEventListener('click', () => {
+  const s = currentSettings();
+  let name = (tplName.value || '').trim();
+  if (!name) name = s.w + 'x' + s.h + ' mm - ' + s.mode;
+  const list = loadUserTpl();
+  const existing = list.find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    if (!confirm('Template "' + name + '" sudah ada. Timpa?')) return;
+    existing.s = s;
+    activeTplId = existing.id;
+  } else {
+    const t = { id: 'u_' + Date.now(), name: name, s: s };
+    list.push(t);
+    activeTplId = t.id;
+  }
+  storeUserTpl(list);
+  tplName.value = '';
+  renderTpl();
+  statusEl.className = 'ok';
+  statusEl.textContent = 'Template "' + name + '" tersimpan.';
+});
+
+tplDefaultBox.addEventListener('change', () => {
+  try {
+    if (tplDefaultBox.checked && activeTplId) {
+      localStorage.setItem(TPL_DEFAULT_KEY, activeTplId);
+    } else {
+      localStorage.removeItem(TPL_DEFAULT_KEY);
+    }
+  } catch (e) {}
+  if (tplDefaultBox.checked && !activeTplId) {
+    statusEl.className = 'err';
+    statusEl.textContent = 'Pilih atau simpan template dulu sebelum menjadikannya default.';
+    tplDefaultBox.checked = false;
+  }
+  renderTpl();
+});
+
+['width', 'height', 'margin', 'autocrop', 'nooverflow'].forEach(id => {
+  document.getElementById(id).addEventListener('input', clearActiveTpl);
+});
+document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', clearActiveTpl));
+
+(function initTpl() {
+  const def = defaultTplId();
+  if (def) {
+    const t = allTpl().find(x => x.id === def);
+    if (t) { applySettings(t.s); activeTplId = t.id; tplDefaultBox.checked = true; }
+  }
+  renderTpl();
+})();
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
