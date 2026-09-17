@@ -35,22 +35,18 @@ dan bawah dibagi rata sehingga label **rata tengah secara vertikal**.
 5. Menghormati `/Rotate` halaman, mediabox yang origin-nya bukan (0,0), dan
    menyetel `cropbox` hasil = ukuran target.
 
-## Template Pengaturan
+## Template Satu Klik
 
-Di bawah form ada kotak **Template pengaturan**. Satu template menyimpan
-seluruh kombinasi: lebar, tinggi, mode, margin, auto-crop, dan anti-potong.
+Di bawah area upload ada satu checkbox: **Pakai template label 100x100 mm**.
+Sekali centang, semua setting langsung terisi: 100x100 mm, mode Fit (jaga
+rasio), margin 2 mm, auto-crop aktif. Kalau ada setting yang diubah manual,
+centangnya lepas sendiri.
 
-- Klik nama template untuk langsung menerapkannya.
-- Isi nama lalu **Simpan pengaturan sekarang** untuk membuat template sendiri.
-- Centang **Jadikan template aktif sebagai default** — template itu otomatis
-  diterapkan setiap kali halaman dibuka (ditandai ★).
-- Klik **×** untuk menghapus template buatan sendiri.
+Mau ubah isi templatenya? Edit satu baris di `api/index.py`:
 
-Template bawaan: `JTR 100x100 (Fit Lebar)`, `Fit + margin 2 mm`,
-`Thermal 100x150`, `Stretch penuh 100x100`.
-
-Template disimpan di `localStorage` browser (per-perangkat, per-browser), jadi
-tidak ada data yang dikirim atau disimpan di server.
+```js
+const TEMPLATE_LABEL = { w: 100, h: 100, margin: 2, mode: 'fit', autocrop: true, nooverflow: true };
+```
 
 ## Struktur Proyek
 
