@@ -195,3 +195,10 @@ QTY          : <qty di tabel produk>
 
 Output ada dua: **teks siap salin** (textarea per pesanan, tanpa judul) dan **PDF 100×100 mm**.
 Label `JTR` otomatis dibaca sebagai **JNE** (JNE Trucking).
+
+
+## Alur terbaru: upload sekali
+
+Pilih PDF label sekali saja di kartu paling atas → **PDF 100×100 mm** (template: Fit, margin 2 mm, auto-crop)
+otomatis terunduh **dan** teks siap salin muncul, diproses bersamaan. Form resize lama tersimpan di
+"Pengaturan resize manual (lanjutan)".

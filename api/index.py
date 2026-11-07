@@ -761,6 +761,25 @@ INDEX_HTML = """<!doctype html>
     <h1>&#128208; PDF Resizer &amp; Label Fitter</h1>
     </header>
 
+  <div class="card" id="sjCard">
+    <h2 style="margin:0 0 4px;font-size:1.15rem;">&#128230; Upload sekali &rarr; PDF 100&times;100 + Teks</h2>
+    <p style="margin:0 0 16px;color:var(--muted);font-size:0.85rem;">Pilih PDF label Shopee. PDF 1:1 otomatis terunduh dan teks siap salin langsung muncul.</p>
+    <div class="dropzone" id="sjDrop"><div>&#128196; Klik atau seret <strong>PDF label</strong> ke sini</div><div id="sjFileInfo" style="margin-top:10px;font-size:.9rem;color:var(--ok);display:none"></div>
+      <input type="file" id="sjFile" accept="application/pdf" /></div>
+    <div class="grid">
+      <div><label for="sjVia">Kirim via (jika tidak terbaca di label)</label>
+        <select id="sjVia"><option>GRAB</option><option>JNE</option><option>GRAB / JNE</option></select></div>
+      <div><label for="sjSuffix">Keterangan kemasan</label>
+        <input type="text" id="sjSuffix" value="Bubble Wrap" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#0f1329;color:var(--text);" /></div>
+    </div>
+    <div id="sjStatus" style="margin-top:14px;font-size:.88rem;text-align:center;color:var(--muted);min-height:20px"></div>
+    <div id="sjList"></div>
+    <button type="button" class="submit-btn" id="sjDownload" style="display:none">Download ulang PDF 100&times;100 mm</button>
+    <button type="button" class="submit-btn" id="sjRead" style="display:none;background:transparent;border:1px solid var(--accent);margin-top:10px">Proses ulang</button>
+  </div>
+
+  <details style="margin-bottom:20px;">
+    <summary style="cursor:pointer;color:var(--muted);font-size:.88rem;margin-bottom:12px;">Pengaturan resize manual (lanjutan)</summary>
   <form id="form" class="card">
     <div class="dropzone" id="dropzone">
       <div>&#128196; Klik atau seret file <strong>PDF</strong> ke sini</div>
@@ -827,23 +846,7 @@ INDEX_HTML = """<!doctype html>
     <button type="submit" class="submit-btn" id="submitBtn">Convert &amp; Download PDF</button>
     <div id="status"></div>
   </form>
-
-  <div class="card" id="sjCard">
-    <h2 style="margin:0 0 4px;font-size:1.15rem;">&#129534; Teks &amp; PDF 100&times;100 dari label Shopee</h2>
-    <p style="margin:0 0 16px;color:var(--muted);font-size:0.85rem;">Unggah PDF label (asli atau hasil resize), hasilnya berupa teks siap salin dan PDF 1:1.</p>
-    <div class="dropzone" id="sjDrop"><div>&#128196; Klik atau seret <strong>PDF label</strong> ke sini</div><div id="sjFileInfo" style="margin-top:10px;font-size:.9rem;color:var(--ok);display:none"></div>
-      <input type="file" id="sjFile" accept="application/pdf" /></div>
-    <div class="grid">
-      <div><label for="sjVia">Kirim via (default)</label>
-        <select id="sjVia"><option>GRAB</option><option>JNE</option><option>GRAB / JNE</option></select></div>
-      <div><label for="sjSuffix">Keterangan kemasan</label>
-        <input type="text" id="sjSuffix" value="Bubble Wrap" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#0f1329;color:var(--text);" /></div>
-    </div>
-    <button type="button" class="submit-btn" id="sjRead">Baca Label</button>
-    <div id="sjStatus" style="margin-top:14px;font-size:.88rem;text-align:center;color:var(--muted);min-height:20px"></div>
-    <div id="sjList"></div>
-    <button type="button" class="submit-btn" id="sjDownload" style="display:none">Download PDF 100&times;100 mm</button>
-  </div>
+  </details>
 
   <footer>
     @ Yudha Pradipta
@@ -995,9 +998,9 @@ sjDrop.addEventListener('dragover', (e) => { e.preventDefault(); sjDrop.classLis
 sjDrop.addEventListener('dragleave', () => sjDrop.classList.remove('dragover'));
 sjDrop.addEventListener('drop', (e) => {
   e.preventDefault(); sjDrop.classList.remove('dragover');
-  if (e.dataTransfer.files.length) { sjFile.files = e.dataTransfer.files; sjShowName(); }
+  if (e.dataTransfer.files.length) { sjFile.files = e.dataTransfer.files; sjShowName(); processAll(); }
 });
-sjFile.addEventListener('change', sjShowName);
+sjFile.addEventListener('change', () => { sjShowName(); processAll(); });
 function sjShowName() {
   const el = document.getElementById('sjFileInfo');
   if (sjFile.files.length) { el.style.display = 'block'; el.textContent = '\u2713 ' + sjFile.files[0].name; }
@@ -1081,39 +1084,69 @@ function renderOrders() {
     });
     refresh();
   });
-  sjDownload.style.display = sjOrders.length ? 'block' : 'none';
 }
 
-document.getElementById('sjRead').addEventListener('click', async () => {
-  if (!sjFile.files.length) { sjMsg('Pilih PDF label terlebih dahulu.', 'err'); return; }
+let sjPdfBlob = null, sjPdfName = 'label_100x100.pdf';
+
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = mk('a', {href: url, download: name}, document.body);
+  a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function doExtract(file) {
   const fd = new FormData();
-  fd.append('file', sjFile.files[0]);
+  fd.append('file', file);
   fd.append('via', document.getElementById('sjVia').value);
   fd.append('suffix', document.getElementById('sjSuffix').value);
-  sjMsg('Membaca label...');
-  try {
-    const res = await fetch('/api/extract', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal membaca PDF.');
-    sjOrders = data.orders;
-    renderOrders();
-    const bad = sjOrders.filter(o => o.check.length).length;
-    sjMsg('\u2713 ' + sjOrders.length + ' pesanan terbaca.' + (bad ? ' ' + bad + ' perlu dicek (kolom merah).' : ''), bad ? '' : 'ok');
-  } catch (err) { sjMsg(err.message, 'err'); }
-});
+  const res = await fetch('/api/extract', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Gagal membaca teks dari PDF.');
+  return data.orders;
+}
 
-sjDownload.addEventListener('click', async () => {
-  sjDownload.disabled = true;
-  try {
-    const res = await fetch('/api/suratjalan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({orders: sjOrders}) });
-    if (!res.ok) throw new Error('Gagal membuat PDF.');
-    const url = URL.createObjectURL(await res.blob());
-    const a = mk('a', {href: url, download: 'surat_jalan.pdf'}, document.body);
-    a.click(); a.remove(); URL.revokeObjectURL(url);
-    sjMsg('\u2713 PDF terunduh.', 'ok');
-  } catch (err) { sjMsg(err.message, 'err'); }
-  finally { sjDownload.disabled = false; }
-});
+async function doConvert(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('width_mm', '100'); fd.append('height_mm', '100'); fd.append('margin_mm', '2');
+  fd.append('mode', 'fit'); fd.append('auto_crop', '1'); fd.append('no_overflow', '1');
+  const res = await fetch('/api/convert', { method: 'POST', body: fd });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Gagal resize PDF.'); }
+  return res.blob();
+}
+
+// Satu kali upload -> PDF 1:1 (diunduh otomatis) + teks, diproses bersamaan.
+async function processAll() {
+  if (!sjFile.files.length) { sjMsg('Pilih PDF label terlebih dahulu.', 'err'); return; }
+  const f = sjFile.files[0];
+  sjMsg('Memproses PDF dan membaca teks...');
+  const [pdfR, txtR] = await Promise.allSettled([doConvert(f), doExtract(f)]);
+  const msgs = [];
+  if (pdfR.status === 'fulfilled') {
+    sjPdfBlob = pdfR.value;
+    sjPdfName = f.name.replace(/\\.pdf$/i, '') + '_100x100.pdf';
+    saveBlob(sjPdfBlob, sjPdfName);
+    msgs.push('✓ PDF 100×100 terunduh');
+  } else { msgs.push('PDF: ' + pdfR.reason.message); }
+  if (txtR.status === 'fulfilled') {
+    sjOrders = txtR.value; renderOrders();
+    const bad = sjOrders.filter(o => o.check.length).length;
+    msgs.push('✓ ' + sjOrders.length + ' pesanan terbaca' + (bad ? ' (' + bad + ' perlu dicek, kolom merah)' : ''));
+  } else { msgs.push('Teks: ' + txtR.reason.message); }
+  sjDownload.style.display = sjPdfBlob ? 'block' : 'none';
+  document.getElementById('sjRead').style.display = 'block';
+  sjMsg(msgs.join(' · '), (pdfR.status === 'fulfilled' && txtR.status === 'fulfilled') ? 'ok' : 'err');
+}
+
+// Ganti via / kemasan -> cukup baca ulang teks (PDF tidak diproses lagi)
+async function reExtract() {
+  if (!sjFile.files.length || !sjOrders.length) return;
+  try { sjOrders = await doExtract(sjFile.files[0]); renderOrders(); } catch (err) { sjMsg(err.message, 'err'); }
+}
+document.getElementById('sjVia').addEventListener('change', reExtract);
+document.getElementById('sjSuffix').addEventListener('change', reExtract);
+document.getElementById('sjRead').addEventListener('click', processAll);
+sjDownload.addEventListener('click', () => { if (sjPdfBlob) saveBlob(sjPdfBlob, sjPdfName); });
 </script>
 </body>
 </html>
