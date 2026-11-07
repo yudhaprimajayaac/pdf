@@ -163,3 +163,35 @@ atas/bawah terpotong.
 ## Lisensi
 
 Bebas digunakan dan dimodifikasi.
+
+
+## Surat Jalan 100×100 mm (dari label Shopee)
+
+Kartu kedua di halaman utama: unggah PDF label (asli atau hasil resize) →
+**Baca Label** → cek/edit hasil → **Download Surat Jalan** (PDF 100×100 mm,
+1 halaman per pesanan).
+
+Isi surat jalan:
+
+```
+NAMA PEMBELI : SHOPEE - <No. Pesanan>
+ALAMAT KIRIM : <alamat penerima>
+PIC PENERIMA : <nama penerima>
+KIRIM VIA    : JNE (label JTR) / GRAB (pilihan form)
+KIRIM TGL    : <Batas Kirim di label>; khusus GRAB:
+               Harus sudah bisa dipickup Jam <jam upload + 30 menit> - Hari Ini
+UNIT         : <merek + model> (Bubble Wrap)
+QTY          : <qty di tabel produk>
+```
+
+- Teks resi yang diputar 90° disaring, kolom *Penerima | Pengirim* dipisah
+  berdasarkan posisi, sehingga hasil bacaan tidak tercampur.
+- Nama unit disederhanakan otomatis (2 kata pertama, mis. `GREE ACOOL4`)
+  + keterangan kemasan; bisa diedit sebelum dicetak.
+- Kolom merah = tidak terbaca, perlu diisi manual.
+- Endpoint: `POST /api/extract` (file, via, suffix) → JSON;
+  `POST /api/suratjalan` (JSON `{orders:[...]}`) → PDF.
+
+
+Output ada dua: **teks siap salin** (textarea per pesanan, tanpa judul) dan **PDF 100×100 mm**.
+Label `JTR` otomatis dibaca sebagai **JNE** (JNE Trucking).
